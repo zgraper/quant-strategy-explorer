@@ -16,6 +16,13 @@ Flow
 """
 
 import io
+import os
+import sys
+
+# Ensure the repository root is in the Python path so that local packages
+# (data, strategies, backtest, ui, utils) are importable on all platforms,
+# including Streamlit Community Cloud.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import pandas as pd
 import streamlit as st

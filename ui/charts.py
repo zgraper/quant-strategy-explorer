@@ -10,18 +10,19 @@ from __future__ import annotations
 
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 
-def plot_price_with_signals(df: pd.DataFrame, signal: pd.Series) -> go.Figure:
-    """Build a candlestick / line chart overlaid with buy & sell markers.
+def plot_price_with_signals(df: pd.DataFrame) -> go.Figure:
+    """Build a price chart overlaid with buy and sell markers.
+
+    Buy markers appear where ``position_change > 0``.
+    Sell markers appear where ``position_change < 0``.
 
     Parameters
     ----------
     df:
-        OHLCV DataFrame with at least a ``Close`` column, indexed by date.
-    signal:
-        Binary signal series (1 = long, 0 = flat) aligned to *df*.
+        DataFrame containing at least ``Close`` and ``position_change``
+        columns, indexed by date.
 
     Returns
     -------
@@ -29,11 +30,10 @@ def plot_price_with_signals(df: pd.DataFrame, signal: pd.Series) -> go.Figure:
         Plotly figure with price line and buy/sell entry/exit markers.
     """
     close = df["Close"]
+    position_change = df.get("position_change", pd.Series(dtype=float))
 
-    # Detect entry (0→1) and exit (1→0) transitions
-    prev_signal = signal.shift(1).fillna(0)
-    entries = close[((signal == 1) & (prev_signal == 0))]
-    exits = close[((signal == 0) & (prev_signal == 1))]
+    buys = close[position_change > 0] if not position_change.empty else pd.Series(dtype=float)
+    sells = close[position_change < 0] if not position_change.empty else pd.Series(dtype=float)
 
     fig = go.Figure()
 
@@ -49,8 +49,8 @@ def plot_price_with_signals(df: pd.DataFrame, signal: pd.Series) -> go.Figure:
 
     fig.add_trace(
         go.Scatter(
-            x=entries.index,
-            y=entries,
+            x=buys.index,
+            y=buys,
             mode="markers",
             name="Buy",
             marker=dict(symbol="triangle-up", color="green", size=10),
@@ -59,8 +59,8 @@ def plot_price_with_signals(df: pd.DataFrame, signal: pd.Series) -> go.Figure:
 
     fig.add_trace(
         go.Scatter(
-            x=exits.index,
-            y=exits,
+            x=sells.index,
+            y=sells,
             mode="markers",
             name="Sell",
             marker=dict(symbol="triangle-down", color="red", size=10),
@@ -77,28 +77,26 @@ def plot_price_with_signals(df: pd.DataFrame, signal: pd.Series) -> go.Figure:
     return fig
 
 
-def plot_equity_curve(results: pd.DataFrame) -> go.Figure:
+def plot_equity_curve(df: pd.DataFrame) -> go.Figure:
     """Build an equity curve chart comparing strategy vs. buy-and-hold.
 
     Parameters
     ----------
-    results:
+    df:
         DataFrame returned by :func:`backtest.engine.run_backtest`.
-        Must contain columns ``equity``, ``daily_return``.
+        Must contain columns ``cumulative_strategy`` and ``cumulative_market``.
 
     Returns
     -------
     go.Figure
         Plotly figure with two lines: strategy equity and buy-and-hold.
     """
-    bah_equity = (1 + results["daily_return"]).cumprod()
-
     fig = go.Figure()
 
     fig.add_trace(
         go.Scatter(
-            x=results.index,
-            y=results["equity"],
+            x=df.index,
+            y=df["cumulative_strategy"],
             mode="lines",
             name="Strategy",
             line=dict(color="#2ca02c", width=2),
@@ -107,8 +105,8 @@ def plot_equity_curve(results: pd.DataFrame) -> go.Figure:
 
     fig.add_trace(
         go.Scatter(
-            x=results.index,
-            y=bah_equity,
+            x=df.index,
+            y=df["cumulative_market"],
             mode="lines",
             name="Buy & Hold",
             line=dict(color="#aec7e8", width=1.5, dash="dash"),
@@ -125,12 +123,12 @@ def plot_equity_curve(results: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def plot_drawdown(results: pd.DataFrame) -> go.Figure:
+def plot_drawdown(df: pd.DataFrame) -> go.Figure:
     """Build a filled area chart showing the strategy drawdown over time.
 
     Parameters
     ----------
-    results:
+    df:
         DataFrame returned by :func:`backtest.engine.run_backtest`.
         Must contain column ``drawdown``.
 
@@ -143,8 +141,8 @@ def plot_drawdown(results: pd.DataFrame) -> go.Figure:
 
     fig.add_trace(
         go.Scatter(
-            x=results.index,
-            y=results["drawdown"] * 100,
+            x=df.index,
+            y=df["drawdown"] * 100,
             mode="lines",
             name="Drawdown",
             fill="tozeroy",

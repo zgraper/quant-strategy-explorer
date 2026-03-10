@@ -15,7 +15,7 @@ from ui.charts import (
     plot_drawdown,
 )
 from backtest.engine import run_backtest
-from backtest.metrics import compute_metrics
+from backtest.metrics import calculate_metrics
 from strategies.ma_crossover import ma_crossover_signals
 from strategies.mean_reversion import mean_reversion_signals
 from strategies.momentum import momentum_signals
@@ -70,8 +70,11 @@ signals = strategy_fn(df["Close"], params)
 # Backtest
 # ---------------------------------------------------------------------------
 
-results = run_backtest(df["Close"], signals)
-metrics = compute_metrics(results)
+df_with_signal = df.copy()
+df_with_signal["signal"] = signals
+
+results = run_backtest(df_with_signal)
+metrics = calculate_metrics(results)
 
 # ---------------------------------------------------------------------------
 # Metrics display
@@ -79,22 +82,23 @@ metrics = compute_metrics(results)
 
 st.subheader("Performance Metrics")
 
-col1, col2, col3 = st.columns(3)
-col4, col5, col6 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
+col5, col6, col7 = st.columns(3)
 
 col1.metric("Total Return", f"{metrics['total_return']:.1%}")
 col2.metric("Ann. Return", f"{metrics['annualized_return']:.1%}")
-col3.metric("Sharpe Ratio", f"{metrics['sharpe_ratio']:.2f}")
-col4.metric("Max Drawdown", f"{metrics['max_drawdown']:.1%}")
-col5.metric("Win Rate", f"{metrics['win_rate']:.1%}")
-col6.metric("# Trades", str(metrics["num_trades"]))
+col3.metric("Ann. Volatility", f"{metrics['annualized_volatility']:.1%}")
+col4.metric("Sharpe Ratio", f"{metrics['sharpe_ratio']:.2f}")
+col5.metric("Max Drawdown", f"{metrics['max_drawdown']:.1%}")
+col6.metric("Win Rate", f"{metrics['win_rate']:.1%}")
+col7.metric("# Trades", str(metrics["number_of_trades"]))
 
 # ---------------------------------------------------------------------------
 # Charts
 # ---------------------------------------------------------------------------
 
 st.subheader("Price & Signals")
-st.plotly_chart(plot_price_with_signals(df, signals), use_container_width=True)
+st.plotly_chart(plot_price_with_signals(results), use_container_width=True)
 
 st.subheader("Equity Curve")
 st.plotly_chart(plot_equity_curve(results), use_container_width=True)

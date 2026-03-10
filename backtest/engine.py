@@ -1,16 +1,18 @@
 """
 backtest/engine.py – Long-Only Backtest Engine
 ===============================================
-Runs a simple daily long-only backtest given a price series and a binary
-signal series (1 = long, 0 = flat).  Returns a DataFrame containing
-daily portfolio values and related columns for further analysis.
+Runs a simple daily long-only backtest given a DataFrame containing
+Close prices and a binary signal (1 = invested, 0 = cash).  Returns the
+DataFrame with additional columns for daily returns, cumulative returns,
+equity curve, and drawdown.
 
 Assumptions
 -----------
-- Daily close prices; signals act on the *next* day's close.
+- Daily close prices; signal from day t-1 is applied to day t's return.
 - Long-only: no short positions.
-- No transaction costs or slippage.
-- Starting capital is 1.0 (all calculations are in normalized units).
+- Transaction cost is subtracted whenever the position changes.
+- Starting equity equals ``initial_capital``.
+- 252 trading days per year.
 """
 
 from __future__ import annotations
@@ -18,46 +20,69 @@ from __future__ import annotations
 import pandas as pd
 
 
-def run_backtest(close: pd.Series, signal: pd.Series) -> pd.DataFrame:
+def run_backtest(
+    df: pd.DataFrame,
+    initial_capital: float = 10000.0,
+    transaction_cost: float = 0.0,
+) -> pd.DataFrame:
     """Execute a long-only backtest and return a results DataFrame.
 
-    The position is entered/exited at the closing price of the bar *after*
-    the signal is generated (i.e. ``signal.shift(1)``).
+    The position on day t is determined by the signal on day t-1 to avoid
+    lookahead bias.
 
     Parameters
     ----------
-    close:
-        Daily closing prices as a pandas Series indexed by date.
-    signal:
-        Binary signal series aligned to *close*: ``1`` = long, ``0`` = flat.
+    df:
+        DataFrame containing at least:
+
+        - ``Close``: daily closing prices.
+        - ``signal``: binary signal (1 = invested, 0 = cash).
+    initial_capital:
+        Starting portfolio value in dollars (default 10,000).
+    transaction_cost:
+        Fractional one-way transaction cost, e.g. 0.001 = 0.1 %.
+        Applied whenever the position changes.
 
     Returns
     -------
     pd.DataFrame
-        DataFrame indexed by date with columns:
+        Input DataFrame extended with columns:
 
-        - ``close``: original closing prices.
-        - ``signal``: raw signal (same-day).
-        - ``position``: lagged signal applied to returns.
-        - ``daily_return``: daily percentage return of the underlying.
-        - ``strategy_return``: daily return of the strategy.
-        - ``equity``: cumulative strategy equity (starts at 1.0).
-        - ``drawdown``: rolling drawdown (negative values, fraction).
+        - ``market_return``: daily percentage return of the underlying.
+        - ``position_change``: day-over-day change in the shifted signal.
+        - ``strategy_return``: daily return of the strategy after costs.
+        - ``cumulative_market``: cumulative buy-and-hold return (starts at 1).
+        - ``cumulative_strategy``: cumulative strategy return (starts at 1).
+        - ``equity_curve``: strategy equity in dollar terms.
+        - ``drawdown``: rolling drawdown as a fraction (negative values).
     """
-    results = pd.DataFrame(index=close.index)
-    results["close"] = close
-    results["signal"] = signal.reindex(close.index).fillna(0).astype(int)
+    out = df.copy()
 
-    # Position is entered the day after the signal (avoid lookahead bias)
-    results["position"] = results["signal"].shift(1).fillna(0).astype(int)
+    # Market return from Close percentage change
+    out["market_return"] = out["Close"].pct_change().fillna(0.0)
 
-    results["daily_return"] = close.pct_change().fillna(0.0)
-    results["strategy_return"] = results["position"] * results["daily_return"]
+    # Shift signal by 1 day to avoid lookahead bias
+    shifted_signal = out["signal"].shift(1).fillna(0).astype(int)
 
-    results["equity"] = (1.0 + results["strategy_return"]).cumprod()
+    # Position change for transaction cost calculation
+    out["position_change"] = shifted_signal.diff().fillna(0)
 
-    # Drawdown relative to running peak
-    rolling_peak = results["equity"].cummax()
-    results["drawdown"] = (results["equity"] - rolling_peak) / rolling_peak
+    # Strategy return = shifted signal * market return
+    out["strategy_return"] = shifted_signal * out["market_return"]
 
-    return results
+    # Subtract transaction cost whenever position changes
+    if transaction_cost > 0.0:
+        out["strategy_return"] -= out["position_change"].abs() * transaction_cost
+
+    # Cumulative returns (normalized, starting at 1)
+    out["cumulative_market"] = (1.0 + out["market_return"]).cumprod()
+    out["cumulative_strategy"] = (1.0 + out["strategy_return"]).cumprod()
+
+    # Equity curve in dollar terms
+    out["equity_curve"] = out["cumulative_strategy"] * initial_capital
+
+    # Drawdown relative to running peak of cumulative strategy
+    rolling_peak = out["cumulative_strategy"].cummax()
+    out["drawdown"] = (out["cumulative_strategy"] - rolling_peak) / rolling_peak
+
+    return out

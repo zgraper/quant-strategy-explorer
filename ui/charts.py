@@ -11,6 +11,35 @@ from __future__ import annotations
 import pandas as pd
 import plotly.graph_objects as go
 
+# Shared palette aligned with the app's dark-blue minimalist theme
+_DARK_BLUE = "#1B3A6B"
+_LIGHT_BLUE = "#4A90D9"
+_GRID_COLOR = "#E8ECF0"
+_BG_COLOR = "#FFFFFF"
+_FONT_COLOR = "#2D3748"
+
+_BASE_LAYOUT = dict(
+    paper_bgcolor=_BG_COLOR,
+    plot_bgcolor=_BG_COLOR,
+    font=dict(family="Inter, sans-serif", color=_FONT_COLOR, size=12),
+    margin=dict(l=48, r=24, t=32, b=48),
+    hovermode="x unified",
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    xaxis=dict(showgrid=False, linecolor=_GRID_COLOR, zeroline=False),
+    yaxis=dict(
+        gridcolor=_GRID_COLOR,
+        linecolor=_GRID_COLOR,
+        zeroline=False,
+        gridwidth=1,
+    ),
+)
+
+
+def _apply_base(fig: go.Figure, **extra) -> go.Figure:
+    layout = {**_BASE_LAYOUT, **extra}
+    fig.update_layout(**layout)
+    return fig
+
 
 def plot_price_with_signals(df: pd.DataFrame) -> go.Figure:
     """Build a price chart overlaid with buy and sell markers.
@@ -43,7 +72,7 @@ def plot_price_with_signals(df: pd.DataFrame) -> go.Figure:
             y=close,
             mode="lines",
             name="Close",
-            line=dict(color="#1f77b4", width=1.5),
+            line=dict(color=_DARK_BLUE, width=1.5),
         )
     )
 
@@ -53,7 +82,7 @@ def plot_price_with_signals(df: pd.DataFrame) -> go.Figure:
             y=buys,
             mode="markers",
             name="Buy",
-            marker=dict(symbol="triangle-up", color="green", size=10),
+            marker=dict(symbol="triangle-up", color="#27AE60", size=10),
         )
     )
 
@@ -63,21 +92,14 @@ def plot_price_with_signals(df: pd.DataFrame) -> go.Figure:
             y=sells,
             mode="markers",
             name="Sell",
-            marker=dict(symbol="triangle-down", color="red", size=10),
+            marker=dict(symbol="triangle-down", color="#E74C3C", size=10),
         )
     )
 
-    fig.update_layout(
-        xaxis_title="Date",
-        yaxis_title="Price",
-        legend=dict(orientation="h"),
-        margin=dict(l=40, r=20, t=30, b=40),
-        hovermode="x unified",
-    )
-    return fig
+    return _apply_base(fig, xaxis_title="Date", yaxis_title="Price")
 
 
-def plot_equity_curve(df: pd.DataFrame) -> go.Figure:
+def plot_equity_curve(df: pd.DataFrame, show_benchmark: bool = True) -> go.Figure:
     """Build an equity curve chart comparing strategy vs. buy-and-hold.
 
     Parameters
@@ -85,11 +107,13 @@ def plot_equity_curve(df: pd.DataFrame) -> go.Figure:
     df:
         DataFrame returned by :func:`backtest.engine.run_backtest`.
         Must contain columns ``cumulative_strategy`` and ``cumulative_market``.
+    show_benchmark:
+        When ``True`` (default) the buy-and-hold equity curve is overlaid.
 
     Returns
     -------
     go.Figure
-        Plotly figure with two lines: strategy equity and buy-and-hold.
+        Plotly figure with strategy equity and, optionally, buy-and-hold.
     """
     fig = go.Figure()
 
@@ -99,28 +123,26 @@ def plot_equity_curve(df: pd.DataFrame) -> go.Figure:
             y=df["cumulative_strategy"],
             mode="lines",
             name="Strategy",
-            line=dict(color="#2ca02c", width=2),
+            line=dict(color=_DARK_BLUE, width=2),
         )
     )
 
-    fig.add_trace(
-        go.Scatter(
-            x=df.index,
-            y=df["cumulative_market"],
-            mode="lines",
-            name="Buy & Hold",
-            line=dict(color="#aec7e8", width=1.5, dash="dash"),
+    if show_benchmark:
+        fig.add_trace(
+            go.Scatter(
+                x=df.index,
+                y=df["cumulative_market"],
+                mode="lines",
+                name="Buy & Hold",
+                line=dict(color=_LIGHT_BLUE, width=1.5, dash="dash"),
+            )
         )
-    )
 
-    fig.update_layout(
+    return _apply_base(
+        fig,
         xaxis_title="Date",
         yaxis_title="Portfolio Value (normalized)",
-        legend=dict(orientation="h"),
-        margin=dict(l=40, r=20, t=30, b=40),
-        hovermode="x unified",
     )
-    return fig
 
 
 def plot_drawdown(df: pd.DataFrame) -> go.Figure:
@@ -146,17 +168,14 @@ def plot_drawdown(df: pd.DataFrame) -> go.Figure:
             mode="lines",
             name="Drawdown",
             fill="tozeroy",
-            line=dict(color="#d62728", width=1),
-            fillcolor="rgba(214, 39, 40, 0.3)",
+            line=dict(color="#E74C3C", width=1),
+            fillcolor="rgba(231, 76, 60, 0.15)",
         )
     )
 
-    fig.update_layout(
+    return _apply_base(
+        fig,
         xaxis_title="Date",
         yaxis_title="Drawdown (%)",
         yaxis_tickformat=".1f",
-        legend=dict(orientation="h"),
-        margin=dict(l=40, r=20, t=30, b=40),
-        hovermode="x unified",
     )
-    return fig

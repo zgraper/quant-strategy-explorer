@@ -111,6 +111,24 @@ def render_sidebar() -> dict:
             "Lookback window (days)", min_value=50, max_value=500, value=100, step=50
         )
 
+    # ---- Benchmark & costs -------------------------------------------------
+    st.sidebar.subheader("Options")
+    params["show_benchmark"] = st.sidebar.toggle(
+        "Show buy & hold benchmark",
+        value=True,
+        help="Overlay the buy-and-hold equity curve on the performance chart.",
+    )
+    params["transaction_cost"] = st.sidebar.number_input(
+        "Transaction cost (one-way, %)",
+        min_value=0.0,
+        max_value=2.0,
+        value=0.0,
+        step=0.05,
+        format="%.2f",
+        help="Flat fractional cost applied each time the position changes. "
+             "E.g. 0.10 = 0.10 % per trade.",
+    ) / 100.0  # convert to fractional
+
     # ---- Run button --------------------------------------------------------
     params["run_backtest"] = st.sidebar.button("▶ Run Backtest", use_container_width=True)
 

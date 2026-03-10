@@ -35,9 +35,9 @@ def mean_reversion_signals(close: pd.Series, params: dict) -> pd.Series:
     pd.Series
         Integer signal series aligned to *close*: ``1`` = long, ``0`` = flat.
     """
-    window: int = params.get("mr_window", 20)
-    entry_z: float = params.get("entry_z", -1.5)
-    exit_z: float = params.get("exit_z", -0.5)
+    window: int = params.get("lookback_window", 20)
+    entry_z: float = params.get("zscore_threshold", -1.5)
+    exit_z: float = 0.0  # exit when z-score reverts to mean
 
     rolling_mean = close.rolling(window).mean()
     rolling_std = close.rolling(window).std()

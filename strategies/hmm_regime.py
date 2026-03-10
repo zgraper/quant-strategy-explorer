@@ -17,9 +17,9 @@ from hmmlearn.hmm import GaussianHMM
 def hmm_regime_signals(close: pd.Series, params: dict) -> pd.Series:
     """Compute long/flat signals via HMM regime detection.
 
-    A 2-state Gaussian HMM is fit to rolling log-returns.  The decoded
-    state sequence is mapped to a long signal by selecting the regime
-    whose in-sample mean return is higher.
+    A Gaussian HMM is fit to the most recent *lookback_window* log-returns.
+    The decoded state sequence is mapped to a long signal by selecting the
+    regime whose in-sample mean return is higher.
 
     Parameters
     ----------
@@ -28,8 +28,9 @@ def hmm_regime_signals(close: pd.Series, params: dict) -> pd.Series:
     params:
         Dictionary of strategy parameters.  Expected keys:
 
-        - ``"n_regimes"`` (int): number of hidden states (default 2).
-        - ``"hmm_iter"`` (int): EM iterations for model fitting (default 100).
+        - ``"n_states"`` (int): number of hidden states (default 2).
+        - ``"lookback_window"`` (int): number of recent trading days used to
+          fit the HMM (default 100).
 
     Returns
     -------
@@ -37,26 +38,32 @@ def hmm_regime_signals(close: pd.Series, params: dict) -> pd.Series:
         Integer signal series aligned to *close*: ``1`` = long, ``0`` = flat.
         Returns all-zero signal if the model fails to converge.
     """
-    n_regimes: int = params.get("n_regimes", 2)
-    hmm_iter: int = params.get("hmm_iter", 100)
+    n_states: int = params.get("n_states", 2)
+    lookback_window: int = params.get("lookback_window", 100)
 
-    log_returns = np.log(close / close.shift(1)).dropna().values.reshape(-1, 1)
+    log_returns = np.log(close / close.shift(1)).dropna()
+
+    # Fit on the most recent lookback_window observations only
+    fit_data = log_returns.iloc[-lookback_window:].values.reshape(-1, 1)
 
     signal = pd.Series(0, index=close.index)
 
     try:
         model = GaussianHMM(
-            n_components=n_regimes,
+            n_components=n_states,
             covariance_type="full",
-            n_iter=hmm_iter,
+            n_iter=100,
             random_state=42,
         )
-        model.fit(log_returns)
-        hidden_states = model.predict(log_returns)
+        model.fit(fit_data)
+
+        # Predict regimes for the full series
+        all_returns = log_returns.values.reshape(-1, 1)
+        hidden_states = model.predict(all_returns)
 
         # Identify the "bull" regime as the state with the highest mean return
         state_means = [
-            log_returns[hidden_states == s].mean() for s in range(n_regimes)
+            all_returns[hidden_states == s].mean() for s in range(n_states)
         ]
         bull_state = int(np.argmax(state_means))
 

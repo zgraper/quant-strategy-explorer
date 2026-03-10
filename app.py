@@ -60,7 +60,7 @@ STRATEGY_MAP = {
     "Moving Average Crossover": ma_crossover_signals,
     "Mean Reversion": mean_reversion_signals,
     "Momentum": momentum_signals,
-    "HMM Regime Detection": hmm_regime_signals,
+    "HMM Regime": hmm_regime_signals,
 }
 
 strategy_fn = STRATEGY_MAP[params["strategy"]]

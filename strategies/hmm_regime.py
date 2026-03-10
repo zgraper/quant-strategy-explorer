@@ -150,10 +150,17 @@ def hmm_regime_signals(close: pd.Series, params: dict) -> pd.Series:
 
     log_returns = np.log(close / close.shift(1)).dropna()
 
+    signal = pd.Series(0, index=close.index)
+
+    # Need enough data to fit the model.  The heuristic of n_states * 10
+    # ensures each hidden state can be visited enough times for the EM
+    # algorithm to estimate stable emission parameters.
+    min_required = max(n_states * 10, n_states + 1)
+    if len(log_returns) < min_required:
+        return signal
+
     # Fit on the most recent lookback_window observations only
     fit_data = log_returns.iloc[-lookback_window:].values.reshape(-1, 1)
-
-    signal = pd.Series(0, index=close.index)
 
     try:
         model = GaussianHMM(
@@ -168,9 +175,13 @@ def hmm_regime_signals(close: pd.Series, params: dict) -> pd.Series:
         all_returns = log_returns.values.reshape(-1, 1)
         hidden_states = model.predict(all_returns)
 
-        # Identify the "bull" regime as the state with the highest mean return
+        # Identify the "bull" regime as the state with the highest mean return.
+        # States with no observations receive -inf so they are never selected.
         state_means = [
-            all_returns[hidden_states == s].mean() for s in range(n_states)
+            float(all_returns[hidden_states == s].mean())
+            if (hidden_states == s).any()
+            else float("-inf")
+            for s in range(n_states)
         ]
         bull_state = int(np.argmax(state_means))
 

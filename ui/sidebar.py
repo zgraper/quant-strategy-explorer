@@ -15,14 +15,14 @@ import streamlit as st
 # Constants
 # ---------------------------------------------------------------------------
 
+TICKERS = ["BTC-USD", "ETH-USD", "SPY", "QQQ", "GLD"]
+
 STRATEGIES = [
     "Moving Average Crossover",
     "Mean Reversion",
     "Momentum",
-    "HMM Regime Detection",
+    "HMM Regime",
 ]
-
-DEFAULT_TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN", "SPY", "QQQ", "BTC-USD", "ETH-USD"]
 
 
 def render_sidebar() -> dict:
@@ -37,19 +37,28 @@ def render_sidebar() -> dict:
         - ``"start_date"`` (str, ISO-8601)
         - ``"end_date"`` (str, ISO-8601)
         - ``"strategy"`` (str)
+        - ``"run_backtest"`` (bool) – ``True`` when the user pressed the button
 
-        Additional keys are strategy-specific (see each strategy module).
+        Additional keys are strategy-specific:
+
+        *Moving Average Crossover*: ``short_window``, ``long_window``
+
+        *Mean Reversion*: ``lookback_window``, ``zscore_threshold``
+
+        *Momentum*: ``lookback_window``
+
+        *HMM Regime*: ``n_states``, ``lookback_window``
     """
     st.sidebar.header("⚙️ Configuration")
 
     # ---- Asset selection ---------------------------------------------------
     st.sidebar.subheader("Asset")
-    ticker_input = st.sidebar.text_input(
-        "Ticker symbol",
-        value="AAPL",
-        help="Enter any valid Yahoo Finance ticker, e.g. AAPL, SPY, BTC-USD.",
+    ticker = st.sidebar.selectbox(
+        "Ticker",
+        options=TICKERS,
+        index=2,  # default: SPY
+        help="Select a ticker from the list.",
     )
-    ticker = ticker_input.strip().upper() or "AAPL"
 
     # ---- Date range --------------------------------------------------------
     st.sidebar.subheader("Date Range")
@@ -74,38 +83,35 @@ def render_sidebar() -> dict:
     st.sidebar.subheader("Strategy Parameters")
 
     if strategy == "Moving Average Crossover":
-        params["fast_window"] = st.sidebar.slider(
-            "Fast MA window (days)", min_value=5, max_value=50, value=20, step=1
+        params["short_window"] = st.sidebar.slider(
+            "Short MA window (days)", min_value=5, max_value=50, value=20, step=1
         )
-        params["slow_window"] = st.sidebar.slider(
-            "Slow MA window (days)", min_value=20, max_value=200, value=50, step=5
+        params["long_window"] = st.sidebar.slider(
+            "Long MA window (days)", min_value=20, max_value=200, value=50, step=5
         )
 
     elif strategy == "Mean Reversion":
-        params["mr_window"] = st.sidebar.slider(
+        params["lookback_window"] = st.sidebar.slider(
             "Lookback window (days)", min_value=5, max_value=60, value=20, step=1
         )
-        params["entry_z"] = st.sidebar.slider(
-            "Entry z-score threshold", min_value=-3.0, max_value=-0.5, value=-1.5, step=0.1
-        )
-        params["exit_z"] = st.sidebar.slider(
-            "Exit z-score threshold", min_value=-1.0, max_value=1.0, value=-0.5, step=0.1
+        params["zscore_threshold"] = st.sidebar.slider(
+            "Z-score entry threshold", min_value=-3.0, max_value=-0.5, value=-1.5, step=0.1
         )
 
     elif strategy == "Momentum":
-        params["mom_window"] = st.sidebar.slider(
-            "Momentum window (days)", min_value=5, max_value=252, value=20, step=1
+        params["lookback_window"] = st.sidebar.slider(
+            "Lookback window (days)", min_value=5, max_value=252, value=20, step=1
         )
-        params["min_return"] = st.sidebar.slider(
-            "Min return to go long (%)", min_value=0.0, max_value=20.0, value=2.0, step=0.5
-        ) / 100.0
 
-    elif strategy == "HMM Regime Detection":
-        params["n_regimes"] = st.sidebar.slider(
-            "Number of regimes", min_value=2, max_value=4, value=2, step=1
+    elif strategy == "HMM Regime":
+        params["n_states"] = st.sidebar.slider(
+            "Number of states", min_value=2, max_value=4, value=2, step=1
         )
-        params["hmm_iter"] = st.sidebar.slider(
-            "EM iterations", min_value=50, max_value=500, value=100, step=50
+        params["lookback_window"] = st.sidebar.slider(
+            "Lookback window (days)", min_value=50, max_value=500, value=100, step=50
         )
+
+    # ---- Run button --------------------------------------------------------
+    params["run_backtest"] = st.sidebar.button("▶ Run Backtest", use_container_width=True)
 
     return params
